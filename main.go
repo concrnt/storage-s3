@@ -138,7 +138,9 @@ func main() {
 
 		var user StorageUser
 		err = db.WithContext(ctx).Where("id = ?", requester.ID).First(&user).Error
-		if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			user = StorageUser{ID: requester.ID}
+		} else if err != nil {
 			log.Println(err)
 			return c.JSON(500, err)
 		}
@@ -295,8 +297,8 @@ func main() {
 			}
 		}
 
-		// create user if not exists
-		err = db.WithContext(ctx).Save(&StorageUser{ID: requester.ID}).Error
+		// Save だと既存行の total_bytes が 0 に上書きされる
+		err = db.WithContext(ctx).FirstOrCreate(&StorageUser{}, StorageUser{ID: requester.ID}).Error
 		if err != nil {
 			log.Println(err)
 			return c.JSON(500, err)

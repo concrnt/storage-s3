@@ -33,3 +33,13 @@ All environment variables are required.
 | accessKeyId     | Access Key ID                |                                                                                            |
 | accessKeySecret | Access Key Secret            |                                                                                            |
 | publicBaseUrl   | Public base URL              | https://storage.example.com/                                                               |
+
+## Maintenance
+
+### total_bytes の再集計
+presign 経路で `total_bytes` が毎回 0 にリセットされていた不具合(修正済み)で狂った使用量を、実ファイルから再計算する。
+
+```sql
+UPDATE storage_users u
+SET total_bytes = COALESCE((SELECT SUM(size) FROM storage_files f WHERE f.owner_id = u.id), 0);
+```
