@@ -22,8 +22,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -101,12 +101,12 @@ func main() {
 	presignClient := s3.NewPresignClient(client)
 
 	e := echo.New()
-	e.Use(middleware.Logger())
+	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
+	e.Use(middleware.CORS("*"))
 	e.Use(interop.ReceiveGatewayAuthPropagation)
 
-	e.GET("/cc-info", func(c echo.Context) error {
+	e.GET("/cc-info", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, interop.CCInfo{
 			Name:    "github.com/totegamma/cc-media-server",
 			Version: version,
@@ -122,7 +122,7 @@ func main() {
 	})
 
 	// ユーザー情報の取得
-	e.GET("/user", func(c echo.Context) error {
+	e.GET("/user", func(c *echo.Context) error {
 		ctx := c.Request().Context()
 
 		requester := ctx.Value(interop.RequesterCtxKey).(interop.Entity)
@@ -147,11 +147,11 @@ func main() {
 
 		user.Quota = quota
 
-		return c.JSON(200, echo.Map{"status": "ok", "content": user})
+		return c.JSON(200, map[string]any{"status": "ok", "content": user})
 	})
 
 	// ファイルのアップロード
-	e.POST("/files", func(c echo.Context) error {
+	e.POST("/files", func(c *echo.Context) error {
 		ctx := c.Request().Context()
 
 		body := c.Request().Body
@@ -189,7 +189,7 @@ func main() {
 		size := reader.Size()
 
 		if user.TotalBytes+size > quota {
-			return c.JSON(403, echo.Map{"error": "quota exceeded"})
+			return c.JSON(403, map[string]any{"error": "quota exceeded"})
 		}
 
 		fileID, extension, err := uploadFile(ctx, client, requester.ID, reader, size, contentType)
@@ -227,11 +227,11 @@ func main() {
 
 		file.SetCcfs()
 
-		return c.JSON(200, echo.Map{"status": "ok", "content": file})
+		return c.JSON(200, map[string]any{"status": "ok", "content": file})
 	})
 
 	// 署名付きURLの発行
-	e.POST("/presign", func(c echo.Context) error {
+	e.POST("/presign", func(c *echo.Context) error {
 		ctx := c.Request().Context()
 
 		requester := ctx.Value(interop.RequesterCtxKey).(interop.Entity)
@@ -251,19 +251,19 @@ func main() {
 			Sha256      string `json:"sha256"`
 		}
 		if err := c.Bind(&req); err != nil {
-			return c.JSON(400, echo.Map{"error": "invalid request body"})
+			return c.JSON(400, map[string]any{"error": "invalid request body"})
 		}
 
 		if req.Size <= 0 {
-			return c.JSON(400, echo.Map{"error": "size must be greater than 0"})
+			return c.JSON(400, map[string]any{"error": "size must be greater than 0"})
 		}
 
 		if req.Sha256 == "" {
-			return c.JSON(400, echo.Map{"error": "sha256 is required"})
+			return c.JSON(400, map[string]any{"error": "sha256 is required"})
 		}
 
 		if !isSha256Hex(req.Sha256) {
-			return c.JSON(400, echo.Map{"error": "sha256 must be 64 hex characters"})
+			return c.JSON(400, map[string]any{"error": "sha256 must be 64 hex characters"})
 		}
 
 		if req.ContentType == "" {
@@ -338,7 +338,7 @@ func main() {
 		if err != nil {
 			var httpErr *echo.HTTPError
 			if errors.As(err, &httpErr) {
-				return c.JSON(httpErr.Code, echo.Map{"error": httpErr.Message})
+				return c.JSON(httpErr.Code, map[string]any{"error": httpErr.Message})
 			}
 			log.Println(err)
 			return c.JSON(500, err)
@@ -346,9 +346,9 @@ func main() {
 
 		file.SetCcfs()
 
-		return c.JSON(200, echo.Map{
+		return c.JSON(200, map[string]any{
 			"status": "ok",
-			"content": echo.Map{
+			"content": map[string]any{
 				"file":      file,
 				"key":       key,
 				"url":       presigned.URL,
@@ -360,7 +360,7 @@ func main() {
 	})
 
 	// ファイルの一覧取得
-	e.GET("/files", func(c echo.Context) error {
+	e.GET("/files", func(c *echo.Context) error {
 		ctx := c.Request().Context()
 
 		requester := ctx.Value(interop.RequesterCtxKey).(interop.Entity)
@@ -383,7 +383,7 @@ func main() {
 		if afterStr != "" { // prev
 			afterInt, err := strconv.ParseInt(afterStr, 10, 64)
 			if err != nil {
-				return c.JSON(400, echo.Map{"error": "invalid after"})
+				return c.JSON(400, map[string]any{"error": "invalid after"})
 			}
 			after := time.Unix(afterInt, 0)
 			err = db.WithContext(ctx).Where("owner_id = ? AND c_date > ?", requester.ID, after).Order("c_date asc").Limit(limit + 1).Find(&files).Error
@@ -403,7 +403,7 @@ func main() {
 		} else if beforeStr != "" { // next
 			beforeInt, err := strconv.ParseInt(beforeStr, 10, 64)
 			if err != nil {
-				return c.JSON(400, echo.Map{"error": "invalid before"})
+				return c.JSON(400, map[string]any{"error": "invalid before"})
 			}
 			before := time.Unix(beforeInt, 0)
 			err = db.WithContext(ctx).Where("owner_id = ? AND c_date < ?", requester.ID, before).Order("c_date desc").Limit(limit + 1).Find(&files).Error
@@ -448,7 +448,7 @@ func main() {
 	})
 
 	// ファイルの削除
-	e.DELETE("/file/:id", func(c echo.Context) error {
+	e.DELETE("/file/:id", func(c *echo.Context) error {
 		ctx := c.Request().Context()
 
 		requester := ctx.Value(interop.RequesterCtxKey).(interop.Entity)
@@ -463,7 +463,7 @@ func main() {
 		}
 
 		if file.OwnerID != requester.ID {
-			return c.JSON(403, echo.Map{"error": "you are not owner"})
+			return c.JSON(403, map[string]any{"error": "you are not owner"})
 		}
 
 		key := strings.TrimPrefix(file.URL, publicBaseUrl)
@@ -492,10 +492,10 @@ func main() {
 			return c.JSON(500, err)
 		}
 
-		return c.JSON(200, echo.Map{"status": "ok"})
+		return c.JSON(200, map[string]any{"status": "ok"})
 	})
 
-	e.GET("/resolve/:hash", func(c echo.Context) error {
+	e.GET("/resolve/:hash", func(c *echo.Context) error {
 		ctx := c.Request().Context()
 		hash := c.Param("hash")
 
@@ -503,7 +503,7 @@ func main() {
 		err = db.WithContext(ctx).Where("sha256 = ?", hash).First(&file).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return c.JSON(404, echo.Map{"error": "file not found"})
+				return c.JSON(404, map[string]any{"error": "file not found"})
 			}
 			log.Println(err)
 			return c.JSON(500, err)
@@ -512,7 +512,7 @@ func main() {
 		file.SetCcfs()
 
 		c.Response().Header().Set("Location", file.URL)
-		return c.JSON(301, echo.Map{"status": "ok", "content": file})
+		return c.JSON(301, map[string]any{"status": "ok", "content": file})
 	})
 
 	portStr := ":8000"
