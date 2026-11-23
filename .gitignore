@@ -3,3 +3,5 @@ _composeData
 mediaserver
 
 .idea
+storage-s3
+tmp/
