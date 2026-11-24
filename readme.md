@@ -34,6 +34,22 @@ All environment variables are required.
 | accessKeySecret | Access Key Secret            |                                                                                            |
 | publicBaseUrl   | Public base URL              | https://storage.example.com/                                                               |
 
+## Bucket CORS
+クライアントは `/presign` で受け取った署名付き URL にブラウザから直接 `PUT` するので、バケットに CORS の設定が必要。無いと `/presign` で DB にファイルだけが登録され、オブジェクトはアップロードされない。
+
+Cloudflare R2 の例(Settings → CORS Policy):
+
+```json
+[
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["Content-Type"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
 ## Maintenance
 
 ### total_bytes の再集計
